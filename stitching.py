@@ -1,0 +1,175 @@
+import numpy as np
+from cv2 import cv2
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+
+def prepare_image_for_matching(img: np.ndarray, roi: tuple = None, downscale_factor=4, kernel_size=3) -> np.ndarray:
+    """
+    Prepares image for keypoint matching by cropping, shrinking and blurring image
+    :param img: Image in BGR format
+    :param roi: Region of interest to crop image to in format x0, y0, x1, y1
+    :param downscale_factor: Factor to downscale image
+    :param kernel_size: Size of kernel for blurring
+    :return: Grayed, downscaled and blurred image
+    """
+    
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = img[roi[1]:roi[3], roi[0]:roi[2]] if roi is not None else img
+    img = cv2.resize(img, (int(img.shape[1] // downscale_factor), int(img.shape[0] // downscale_factor)))
+    img = cv2.medianBlur(img, kernel_size)
+    
+    return img
+
+
+def get_matches(descs1: np.ndarray, descs2: np.ndarray, ratio_thresh=0.5, k=2, filter_matches=True) -> list:
+    """
+    Matches keypoints and returns (filtered) matches using a heuristical matcher
+    :param descs1: Descriptors of keypoints of first image
+    :param descs2: Descriptors of keypoints of second image
+    :param ratio_thresh: Ratio of threshold to filter matches. The smaller the more matches will be filtered
+    :param k: Count of best matches. Used for `knnMatch` function
+    :param filter_matches: Whether to filter matches
+    :return: (Filtered) matches
+    """
+    
+    matcher = cv2.FlannBasedMatcher({'algorithm': 0, 'trees': 5}, {'checks': 50})
+    matches = matcher.knnMatch(descs1, descs2, k=k)
+    
+    # Filter good matches based on distance and given threshold
+    if filter_matches:
+        good_matches = []
+        for match in matches:
+            if len(match) > 1:
+                if match[0].distance < ratio_thresh * match[1].distance:
+                    good_matches.append(match)
+        
+        return good_matches
+    
+    return list(matches)
+
+
+def plot_matches(img1: np.ndarray, img2: np.ndarray, pts1: list, pts2: list, matches: list, keypoint=False):
+    """
+    Plots the matches of two images
+    :param img1: First image
+    :param img2: Second image
+    :param pts1: First list of either cv2.KeyPoints or tuples of coordinates
+    :param pts2: Second list of either cv2.KeyPoints or tuples of coordinates
+    :param matches: List of matches
+    :param keypoint: Whether the points are of type cv2.KeyPoint or standard tuples of integer coordinates
+    """
+    
+    kps1, kps2 = [[cv2.KeyPoint(*pt, 50) for pt in pts] for pts in [pts1, pts2]] if not keypoint else (pts1, pts2)
+    
+    vis = cv2.drawMatchesKnn(img1, kps1, img2, kps2, matches, None, flags=2)
+    plt.imshow(vis)
+    plt.show()
+
+
+def get_points_and_descriptors(img: np.ndarray, roi: tuple = None, downscale_factor=4, kernel_size=3) -> (list, np.ndarray):
+    """
+    Determines points and descriptors in an image using SIFT algorithm
+    :param img: Image to find keypoints in
+    :param roi: Region of interest in image to find keypoints in
+    :param downscale_factor: Factor to downscale image to make SIFT more robust
+    :param kernel_size: Size of blurring kernel to make SIFT more robust
+    :return: Keypoints and descriptors
+    """
+    
+    detector = cv2.xfeatures2d.SIFT_create()
+    
+    img_prepd = prepare_image_for_matching(img, roi, downscale_factor, kernel_size)
+    kps, descs = detector.detectAndCompute(img_prepd, None)
+    
+    return list(kps), descs
+
+
+def get_matching_points(img1: np.ndarray, img2: np.ndarray, roi1: tuple = None, roi2: tuple = None, downscale_factor=4, kernel_size=3, ratio_thresh=0.5, k=2,
+                        plot=False) -> (np.ndarray, np.ndarray):
+    """
+    Using points and descriptors retrieved by a keypoint matcher (here: AKAZE) generate bounding boxes on a new image
+    For robustness and accuracy, for each labeled object only nearby keypoints are considered and outliers are removed
+    :param img1: Reference image
+    :param img2: New image to compare
+    :param roi1: Region of interest to crop image to in format x0, y0, x1, y1
+    :param roi2: Region of interest to crop image to in format x0, y0, x1, y1
+    :param downscale_factor: Scaling factor to resize image for better feature extraction
+    :param kernel_size: Size of kernel for blurring
+    :param ratio_thresh: Threshold to filter out bad matches [0, 1] (the higher the more matches will be considered)
+    :param k: Count of best matches. Used for filtering matches
+    :param plot: Whether to plot the matched pairs of keypoints
+    :return: Matched points for both images
+    """
+    
+    (kps1, descs1), (kps2, descs2) = [get_points_and_descriptors(img, roi, downscale_factor, kernel_size) for img, roi in zip([img1, img2], [roi1, roi2])]
+    
+    # Get actual points for original image by transforming back the keypoints
+    pts1, pts2 = [np.array([kp.pt for kp in kps]) * downscale_factor + (roi[:2] if roi is not None else (0, 0)) for kps, roi in zip([kps1, kps2], [roi1, roi2])]
+    
+    matches = get_matches(descs1, descs2, ratio_thresh, k)
+    
+    if plot:
+        plot_matches(img1, img2, pts1, pts2, matches, keypoint=False)
+    
+    # Get actual matched points using matches
+    matched_pts1 = pts1[[match[0].queryIdx for match in matches]]
+    matched_pts2 = pts2[[match[0].trainIdx for match in matches]]
+    
+    return matched_pts1, matched_pts2
+
+
+def stitch_images(img1: np.ndarray, img2: np.ndarray, homography: np.ndarray) -> (np.ndarray, list):
+    """
+    Stitches two images by warping second image to first image and adding first image to the warped image
+    :param img1: First image
+    :param img2: Second image to be warped on the other image
+    :param homography: Calculated homography
+    :return: Stitched image and used translation
+    """
+    
+    pts1, pts2 = [np.float32([[[0, 0]], [[0, height]], [[width, height]], [[width, 0]]]) for height, width in [img1.shape[:2], img2.shape[:2]]]
+    pts2_transformed = cv2.perspectiveTransform(pts2, homography)
+    pts = np.concatenate((pts1, pts2_transformed), axis=0)
+    
+    xmin, ymin = np.int32(pts.min(axis=0).ravel() - 0.5)
+    xmax, ymax = np.int32(pts.max(axis=0).ravel() + 0.5)
+    translation = [-xmin, -ymin]
+    homography_translation = np.array([[1, 0, translation[0]], [0, 1, translation[1]], [0, 0, 1]])
+    
+    stitched_img = cv2.warpPerspective(img2, homography_translation.dot(homography), (xmax - xmin, ymax - ymin))
+    stitched_img[translation[1]:img1.shape[0] + translation[1], translation[0]:img1.shape[1] + translation[0]] = img1
+    
+    return stitched_img, translation
+
+
+def create_panorama(img_paths: list, rois: list, downscale_factor=4, kernel_size=3, ratio_thresh=0.5, k=2, ransac_thresh=4) -> np.ndarray:
+    """
+    Creates a panorama by subsequently stitching neighbouring images
+    Image paths must be sorted but can be from right to left or the other way around
+    :param img_paths: List of sorted image paths
+    :param rois: List of Region of Interests for each image. Can be None for an image when whole image is region of interest
+    :param downscale_factor: Factor to downscale image for more robust keypoint detection
+    :param kernel_size: Size of kernel for blurring image for more robust keypoint detection. Number must be odd. The higher the more blurry
+    :param ratio_thresh: Ratio of threshold to filter matches. The lower the more matches will be filtered out
+    :param k: Count of best matches. Used for getting matches
+    :param ransac_thresh: Threshold for RANSAC algorithm to find homography
+    :return: Panorama of multiple stitched images
+    """
+    
+    stitched_img, last_translation = None, None
+    
+    # Create generator with pairs of subsequent items
+    gen = zip(*[[lst[i:i + 2] for i in range(len(lst) - 1)] for lst in [img_paths, rois]])
+    
+    for img_paths, rois in tqdm(gen, total=len(img_paths) - 1):
+        img1, img2 = [cv2.imread(path) for path in img_paths]
+        
+        matched_pts1, matched_pts2 = get_matching_points(img2, img1, *rois, downscale_factor, kernel_size, ratio_thresh, k)
+        
+        homography, _ = cv2.findHomography(matched_pts2 + ([0, 0] if last_translation is None else last_translation), matched_pts1, cv2.RANSAC,
+                                           ransacReprojThreshold=ransac_thresh)
+        
+        stitched_img, last_translation = stitch_images(img2, img1 if stitched_img is None else stitched_img, homography)
+    
+    return stitched_img
