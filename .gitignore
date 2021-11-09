@@ -3,6 +3,7 @@
 assets
 **/.DS_Store
 .DS_Store
+notebooks
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
