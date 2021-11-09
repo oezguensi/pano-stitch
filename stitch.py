@@ -119,12 +119,13 @@ def get_matching_points(img1: np.ndarray, img2: np.ndarray, roi1: tuple = None, 
     return matched_pts1, matched_pts2
 
 
-def stitch_images(img1: np.ndarray, img2: np.ndarray, homography: np.ndarray) -> (np.ndarray, list):
+def stitch_images(img1: np.ndarray, img2: np.ndarray, homography: np.ndarray, overlay=False) -> (np.ndarray, list):
     """
     Stitches two images by warping second image to first image and adding first image to the warped image
     :param img1: First image
     :param img2: Second image to be warped on the other image
     :param homography: Calculated homography
+    :param overlay: Whether to overlay image in background at black areas
     :return: Stitched image and used translation
     """
     
@@ -134,18 +135,56 @@ def stitch_images(img1: np.ndarray, img2: np.ndarray, homography: np.ndarray) ->
     
     xmin, ymin = np.int32(pts.min(axis=0).ravel() - 0.5)
     xmax, ymax = np.int32(pts.max(axis=0).ravel() + 0.5)
-    translation = [-xmin, -ymin]
-    homography_translation = np.array([[1, 0, translation[0]], [0, 1, translation[1]], [0, 0, 1]])
+    t = [-xmin, -ymin]
+    homography_translation = np.array([[1, 0, t[0]], [0, 1, t[1]], [0, 0, 1]])
     
     stitched_img = cv2.warpPerspective(img2, homography_translation.dot(homography), (xmax - xmin, ymax - ymin))
-    stitched_img[translation[1]:img1.shape[0] + translation[1], translation[0]:img1.shape[1] + translation[0]] = img1
     
-    return stitched_img, translation
+    if overlay:
+        mask = np.any(stitched_img[t[1]:img1.shape[0] + t[1], t[0]:img1.shape[1] + t[0]] != (0, 0, 0), axis=-1) & np.any(img1 != (0, 0, 0), axis=-1)
+        
+        stitched_img[t[1]:img1.shape[0] + t[1], t[0]:img1.shape[1] + t[0]] += img1
+        stitched_img[t[1]:img1.shape[0] + t[1], t[0]:img1.shape[1] + t[0]][mask] = img1[mask]
+    else:
+        stitched_img[t[1]:img1.shape[0] + t[1], t[0]:img1.shape[1] + t[0]] = img1
+    
+    return stitched_img, t
 
 
-def create_panorama(img_paths: list, rois: list, downscale_factor=4, kernel_size=3, ratio_thresh=0.5, k=2, ransac_thresh=4) -> np.ndarray:
+def create_panorama(img_paths: list, rois: list, downscale_factor=4, kernel_size=3, ratio_thresh=0.5, k=2, ransac_thresh=4) -> (np.ndarray, list):
     """
     Creates a panorama by subsequently stitching neighbouring images
+    Image paths must be sorted but can be from right to left or the other way around
+    :param img_paths: List of sorted image paths
+    :param rois: List of Region of Interests for each image. Can be None for an image when whole image is region of interest
+    :param downscale_factor: Factor to downscale image for more robust keypoint detection
+    :param kernel_size: Size of kernel for blurring image for more robust keypoint detection. Number must be odd. The higher the more blurry
+    :param ratio_thresh: Ratio of threshold to filter matches. The lower the more matches will be filtered out
+    :param k: Count of best matches. Used for getting matches
+    :param ransac_thresh: Threshold for RANSAC algorithm to find homography
+    :return: Panorama of multiple stitched images and last translation
+    """
+    
+    stitched_img, last_t = None, None
+    
+    # Create generator with pairs of subsequent items
+    gen = zip(*[[lst[i:i + 2] for i in range(len(lst) - 1)] for lst in [img_paths, rois]])
+    
+    for img_paths, rois in tqdm(gen, total=len(img_paths) - 1):
+        img1, img2 = [cv2.imread(path) for path in img_paths]
+        
+        # Stitch subsequent images
+        matched_pts1, matched_pts2 = get_matching_points(img2, img1, *rois, downscale_factor, kernel_size, ratio_thresh, k)
+        homography, _ = cv2.findHomography(matched_pts2 + ([0, 0] if last_t is None else last_t), matched_pts1, cv2.RANSAC,
+                                           ransacReprojThreshold=ransac_thresh)
+        stitched_img, last_t = stitch_images(img2, img1 if stitched_img is None else stitched_img, homography)
+    
+    return stitched_img, last_t
+
+
+def create_centered_panorama(img_paths: list, rois: list, downscale_factor=4, kernel_size=3, ratio_thresh=0.5, k=2, ransac_thresh=4) -> np.ndarray:
+    """
+    Creates a centered panorama by subsequently stitching neighbouring images for both halfs of the images and then combining those two panoramas
     Image paths must be sorted but can be from right to left or the other way around
     :param img_paths: List of sorted image paths
     :param rois: List of Region of Interests for each image. Can be None for an image when whole image is region of interest
@@ -157,19 +196,18 @@ def create_panorama(img_paths: list, rois: list, downscale_factor=4, kernel_size
     :return: Panorama of multiple stitched images
     """
     
-    stitched_img, last_translation = None, None
+    center_idx = len(img_paths) // 2
     
-    # Create generator with pairs of subsequent items
-    gen = zip(*[[lst[i:i + 2] for i in range(len(lst) - 1)] for lst in [img_paths, rois]])
+    # Create panoramas for both halfs of the images
+    panorama1, last_t1 = create_panorama(img_paths[:center_idx], rois[:center_idx], downscale_factor, kernel_size, ratio_thresh, k, ransac_thresh)
+    panorama2, last_t2 = create_panorama(img_paths[center_idx:][::-1], rois[center_idx:][::-1], downscale_factor, kernel_size, ratio_thresh, k, ransac_thresh)
     
-    for img_paths, rois in tqdm(gen, total=len(img_paths) - 1):
-        img1, img2 = [cv2.imread(path) for path in img_paths]
-        
-        matched_pts1, matched_pts2 = get_matching_points(img2, img1, *rois, downscale_factor, kernel_size, ratio_thresh, k)
-        
-        homography, _ = cv2.findHomography(matched_pts2 + ([0, 0] if last_translation is None else last_translation), matched_pts1, cv2.RANSAC,
-                                           ransacReprojThreshold=ransac_thresh)
-        
-        stitched_img, last_translation = stitch_images(img2, img1 if stitched_img is None else stitched_img, homography)
+    # Read in images at both ends of the panoramas
+    img1, img2 = cv2.imread(img_paths[center_idx - 1]), cv2.imread(img_paths[center_idx])
+    
+    # Stitch both panoramas
+    matched_pts1, matched_pts2 = get_matching_points(img2, img1, rois[center_idx - 1], rois[center_idx], downscale_factor, kernel_size, ratio_thresh, k)
+    homography, _ = cv2.findHomography(matched_pts2 + last_t1, matched_pts1 + last_t2, cv2.RANSAC, ransacReprojThreshold=ransac_thresh)
+    stitched_img, _ = stitch_images(panorama2, panorama1, homography, overlay=True)
     
     return stitched_img
