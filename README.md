@@ -27,12 +27,14 @@ Used packages:
 2. Run `python main.py --txt-path <Path to .txt file containing image paths>`. You can save the resulting image by
    providing a `--save-path` flag with the corresponding destination path.
 3. If the algorithm fails it is mostly because it didn't find enough matched keypoints. In such cases the script has
-   multiple hyperparameters, which you can experiment with. The default values should work for most instances. For more
-   information on the different options run `python main.py --help`.
+   multiple hyperparameters, which you can experiment with. For more information on the different options
+   run `python main.py --help`.
 
 # Demo
 
-The assets directory contains demo files which you can use to try out the algorithm: (images are taken from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
+The assets directory contains demo files which you can use to try out the algorithm: (images are taken
+from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
 
-`python main.py --txt-path assets/files2.txt` will plot following image:
+E.g. `python main.py --txt-path assets/files2.txt --ratio-thresh 0.7 --kernel-size 1 --downscale-factor 1` will not blur
+or downscale the images and will plot following resulting panorama:
 ![](assets/S_stitched.jpg)
