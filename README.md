@@ -12,10 +12,9 @@ The algorithm stitches both halfs of the images and then combines those two pano
 # Installation
 
 Create a virtual environment with Python 3 (repository is tested with Python 3.7) using e.g. `pyenv` or `conda` and
-install the necessary packages by running: `pip install requirements.txt`
+install the necessary packages by running: `pip install -r requirements.txt`
 Used packages:
-
-- `opencv_python`
+- `opencv`
 - `matplotlib`
 - `tqdm`
 - `numpy`
