@@ -34,6 +34,10 @@ Used packages:
 The assets directory contains demo files which you can use to try out the algorithm: (images are taken
 from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
 
-E.g. `python main.py --txt-path assets/files2.txt --ratio-thresh 0.7 --kernel-size 1 --downscale-factor 1` will not blur
-or downscale the images and will plot following resulting panorama:
-![](assets/S_stitched.jpg)
+E.g. `python main.py --txt-path assets/files2.txt --downscale-factor 1 --kernel-size 1` will not blur
+or downscale the images and will plot this resulting panorama:
+![](assets/stitched2.jpg)
+
+Here are some other examples:
+![](assets/stitched1.jpg)
+![](assets/stitched3.jpg)
