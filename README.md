@@ -4,8 +4,10 @@ The algorithm uses Python and OpenCV to stitch multiple images together to creat
 
 Keypoint matching serves for calculating a homography which is used to stitch neighbouring images.
 
-The images fed into the algorithm must be ordered but the direction doesn't matter. They can be from right to left or
+The images fed into the algorithm must be ordered, but the direction doesn't matter. They can be from right to left or
 left to right and **in contrast to other public projects** also from up to down or down to up.
+
+The algorithm stitches both halfs of the images and then combines those two panoramas to minimize the resulting skew.
 
 # Installation
 
