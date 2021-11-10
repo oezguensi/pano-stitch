@@ -28,6 +28,13 @@ Used packages:
 3. If the algorithm fails it is mostly because it didn't find enough matched keypoints. In such cases the script has
    multiple hyperparameters, which you can experiment with. For more information on the different options
    run `python main.py --help`.
+   
+In some cases you would want to define a Region of Interest (ROI) in the images, in which keypoints should be detected. This is e.g. the case when you have a moving object in a still standing video. By selecting the Regions of Interest in every frame of the video you can create a panorama of the object by ignoring the background. For that specify the ROI after the image path in the .txt file like so (if no ROI is specified, like in the last row, whole image will be used): 
+```
+example/path1.jpg, (0, 350, 500, 700)
+example/path2.jpg, (50, 400, 400, 600)
+example/path3.jpg
+```
 
 # Demo
 
