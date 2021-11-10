@@ -37,7 +37,7 @@ def main():
         plt.imshow(cv2.cvtColor(panorama, cv2.COLOR_BGR2RGB))
         plt.show()
     else:
-        cv2.imshow(args.save_path, panorama)
+        cv2.imwrite(args.save_path, panorama)
 
 
 if __name__ == '__main__':
