@@ -30,7 +30,7 @@ Used packages:
 
 # Demo
 
-The assets directory contains demo files which you can use to try out the algorithm: (images are taken from [this](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
+The assets directory contains demo files which you can use to try out the algorithm: (images are taken from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
 
 `python main.py --txt-path assets/files2.txt` will plot following image:
 ![](assets/S_stitched.jpg)
