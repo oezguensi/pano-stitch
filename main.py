@@ -7,9 +7,9 @@ from stitch import create_centered_panorama
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save-path', type=str, default=None, help='Path to save image to')
-    parser.add_argument('--txt-path', type=str, default=None,
+    parser.add_argument('--txt-path', type=str, required=True,
                         help='.txt file containing sorted paths to images and additional Region of interests seperated by comma')
+    parser.add_argument('--save-path', type=str, default=None, help='Path to save image to')
     
     parser.add_argument('--downscale-factor', type=int, default=4, help='Factor to downscale image for more robust keypoint detection')
     parser.add_argument('--kernel-size', type=int, default=3,
