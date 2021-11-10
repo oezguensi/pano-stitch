@@ -15,10 +15,10 @@ Create a virtual environment with Python 3 (repository is tested with Python 3.7
 install the necessary packages by running: `pip install requirements.txt`
 Used packages:
 
-- `opencv_python`
+- `opencv`
+- `numpy`
 - `matplotlib`
 - `tqdm`
-- `numpy`
 
 # Usage
 
@@ -32,7 +32,8 @@ Used packages:
 
 # Demo
 
-The assets directory contains demo files which you can use to try out the algorithm: (images are taken from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
+The assets directory contains demo files which you can use to try out the algorithm: (images are taken
+from [here](https://github.com/kushalvyas/Python-Multiple-Image-Stitching) for comparison).
 
 `python main.py --txt-path assets/files2.txt` will plot following image:
 ![](assets/S_stitched.jpg)

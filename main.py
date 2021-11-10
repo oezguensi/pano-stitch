@@ -14,8 +14,9 @@ def parse_args():
     parser.add_argument('--downscale-factor', type=int, default=4, help='Factor to downscale image for more robust keypoint detection')
     parser.add_argument('--kernel-size', type=int, default=3,
                         help='Size of kernel for blurring image for more robust keypoint detection. Number must be odd. The higher the more blurry')
-    parser.add_argument('--ratio-thresh', type=float, default=0.7, help='Ratio of threshold to filter matches. The lower the more matches will be filtered out')
     parser.add_argument('--k', type=int, default=2, help='Count of best matches. Used for getting matches')
+    parser.add_argument('--ratio-thresh', type=float, default=0.7, help='Ratio of threshold to filter matches. The lower the more matches will be filtered out')
+    parser.add_argument('--increase-by', type=float, default=0.1, help='Value to increase `ratio_thresh` by until matches are found or 0.99 is reached')
     parser.add_argument('--ransac-thresh', type=int, default=4, help='Threshold for RANSAC algorithm to find homography')
     
     args = parser.parse_args()
