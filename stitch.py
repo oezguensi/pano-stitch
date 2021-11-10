@@ -205,7 +205,7 @@ def create_panorama(img_paths: list, rois: list = None, downscale_factor=4, kern
         img1, img2 = [cv2.imread(path) for path in img_paths]
         
         # Stitch subsequent images
-        matched_pts1, matched_pts2 = get_matching_points(img2, img1, *rois, downscale_factor, kernel_size, k, ratio_thresh, increase_by, plot=True)
+        matched_pts1, matched_pts2 = get_matching_points(img2, img1, *rois, downscale_factor, kernel_size, k, ratio_thresh, increase_by)
         homography, _ = cv2.findHomography(matched_pts2 + ([0, 0] if last_t is None else last_t), matched_pts1, cv2.RANSAC,
                                            ransacReprojThreshold=ransac_thresh)
         stitched_img, last_t = stitch_images(img2, img1 if stitched_img is None else stitched_img, homography)
